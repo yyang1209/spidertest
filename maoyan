@@ -1,1 +1,71 @@
-分支测试
+import json
+import re
+from multiprocessing import Pool
+import time
+
+import requests
+from requests.exceptions import RequestException
+
+#获取一个url下的html文件
+class MaoYan(object):
+    def __init__(self):
+        self.header = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36'}
+
+
+    def getOnePage(self,url):
+        html = requests.get(url, headers=self.header)
+        return html.text
+
+
+#解析html文件   其中使用了正则匹配
+def parse_one_page(html):
+    pattern = re.compile('<p class="name"><a href="(.*?)" title="(.*?)".*?主演：(.*?)\n', re.S)
+    items = re.findall(pattern, html)
+    #item[0]为剧情简介页面的地址
+    for item in items:
+        #此处是为剧情简介页面处理
+        innerUrls = 'http://maoyan.com' + item[0]
+        synopsis = MaoYan()
+        synopsisHtml = synopsis.getOnePage(innerUrls)
+        synosisPattern = re.compile('<span class="dra">(.*?)</span>', re.S)
+        synopsisItems = re.findall(synosisPattern, synopsisHtml)
+        #剧情简介信息至此已存储到synopsisItems[0]中
+        yield{
+            '标题': item[1],
+            '主演': item[2],
+            '剧情简介': synopsisItems[0]
+        }
+#写入文件 使用json加载字典
+def write_to_file(content):
+    #加上encoding='utf-8'  和  ensure_ascii=False显示汉字
+    with open('MaoyanTop100.txt', 'a', encoding='utf-8') as f:
+        #字典转换成 字符串
+        f.write(json.dumps(content, ensure_ascii=False) + '\n')
+        f.close()
+
+def main(offset):
+    #猫眼电影Top100各页面地址规则
+    url = 'http://maoyan.com/board/4?offset={}'.format(offset)
+    maoyan = MaoYan()
+    html = maoyan.getOnePage(url)
+    # total = []
+
+    for item in parse_one_page(html):
+        print(item)
+        # total.extend(item)
+        write_to_file(item)
+    # save_to_pandas(total)
+
+
+if __name__ == '__main__':
+    #time1 = time.time()
+
+    #pool = Pool()
+    #pool.map(main, [i*10 for i in range(10)])
+
+    for i in range(10):
+        main(i*10)
+        time.sleep(1)
+
+    #time2 = time.time()
+    #print(time2-time1)
